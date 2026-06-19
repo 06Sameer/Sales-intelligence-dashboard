@@ -1,0 +1,376 @@
+// ============================================================
+//  Sales Data Analysis Dashboard 2025
+//  Power BI DAX Measures Library
+//  Author: Data Analytics Team
+//  Description: Complete DAX measures for all 5 dashboard pages
+// ============================================================
+
+
+// ══════════════════════════════════════════════════════════
+// TABLE: SalesData  (imported from cleaned_sales_data.csv)
+// ══════════════════════════════════════════════════════════
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 1 — CORE REVENUE MEASURES
+// ─────────────────────────────────────────────────────────
+
+Total Revenue =
+    SUM(SalesData[Revenue])
+
+Total Cost =
+    SUM(SalesData[Cost])
+
+Total Profit =
+    SUM(SalesData[Profit])
+
+Total Orders =
+    DISTINCTCOUNT(SalesData[Order_ID])
+
+Total Quantity =
+    SUM(SalesData[Quantity])
+
+Average Order Value =
+    AVERAGEX(
+        VALUES(SalesData[Order_ID]),
+        CALCULATE(SUM(SalesData[Revenue]))
+    )
+
+Profit Margin % =
+    DIVIDE(
+        [Total Profit],
+        [Total Revenue],
+        0
+    ) * 100
+
+Average Discount % =
+    AVERAGE(SalesData[Discount]) * 100
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 2 — TIME INTELLIGENCE MEASURES
+// ─────────────────────────────────────────────────────────
+
+Revenue LY =
+    CALCULATE(
+        [Total Revenue],
+        SAMEPERIODLASTYEAR(DateTable[Date])
+    )
+
+Revenue MTD =
+    CALCULATE(
+        [Total Revenue],
+        DATESMTD(DateTable[Date])
+    )
+
+Revenue QTD =
+    CALCULATE(
+        [Total Revenue],
+        DATESQTD(DateTable[Date])
+    )
+
+Revenue YTD =
+    CALCULATE(
+        [Total Revenue],
+        DATESYTD(DateTable[Date])
+    )
+
+YoY Revenue Growth % =
+    VAR CurrentRevenue = [Total Revenue]
+    VAR PriorRevenue   = [Revenue LY]
+    RETURN
+        IF(
+            NOT ISBLANK(PriorRevenue) && PriorRevenue <> 0,
+            DIVIDE(CurrentRevenue - PriorRevenue, PriorRevenue) * 100,
+            BLANK()
+        )
+
+YoY Growth Arrow =
+    VAR GrowthPct = [YoY Revenue Growth %]
+    RETURN
+        IF(GrowthPct >= 0,
+            "▲ " & FORMAT(GrowthPct, "0.1") & "%",
+            "▼ " & FORMAT(ABS(GrowthPct), "0.1") & "%"
+        )
+
+MoM Revenue Growth % =
+    VAR CurrentMonth  = [Total Revenue]
+    VAR PreviousMonth = CALCULATE(
+        [Total Revenue],
+        DATEADD(DateTable[Date], -1, MONTH)
+    )
+    RETURN
+        IF(
+            NOT ISBLANK(PreviousMonth) && PreviousMonth <> 0,
+            DIVIDE(CurrentMonth - PreviousMonth, PreviousMonth) * 100,
+            BLANK()
+        )
+
+Cumulative Revenue =
+    CALCULATE(
+        [Total Revenue],
+        FILTER(
+            ALLSELECTED(DateTable[Date]),
+            DateTable[Date] <= MAX(DateTable[Date])
+        )
+    )
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 3 — PRODUCT MEASURES
+// ─────────────────────────────────────────────────────────
+
+Top Product by Revenue =
+    CALCULATE(
+        FIRSTNONBLANK(SalesData[Product_Name], 1),
+        TOPN(1,
+            SUMMARIZE(SalesData, SalesData[Product_Name], "Rev", SUM(SalesData[Revenue])),
+            [Rev], DESC
+        )
+    )
+
+Product Revenue Rank =
+    RANKX(
+        ALLSELECTED(SalesData[Product_Name]),
+        [Total Revenue],
+        ,
+        DESC,
+        DENSE
+    )
+
+Product Profit Rank =
+    RANKX(
+        ALLSELECTED(SalesData[Product_Name]),
+        [Total Profit],
+        ,
+        DESC,
+        DENSE
+    )
+
+Revenue % of Total (Product) =
+    DIVIDE(
+        [Total Revenue],
+        CALCULATE([Total Revenue], REMOVEFILTERS(SalesData[Product_Name])),
+        0
+    ) * 100
+
+Category Revenue Share % =
+    DIVIDE(
+        [Total Revenue],
+        CALCULATE([Total Revenue], REMOVEFILTERS(SalesData[Product_Category])),
+        0
+    ) * 100
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 4 — REGIONAL MEASURES
+// ─────────────────────────────────────────────────────────
+
+Top Region by Revenue =
+    CALCULATE(
+        FIRSTNONBLANK(SalesData[Region], 1),
+        TOPN(1,
+            SUMMARIZE(SalesData, SalesData[Region], "Rev", SUM(SalesData[Revenue])),
+            [Rev], DESC
+        )
+    )
+
+Region Revenue Rank =
+    RANKX(
+        ALLSELECTED(SalesData[Region]),
+        [Total Revenue],
+        ,
+        DESC,
+        DENSE
+    )
+
+Region Revenue % of Total =
+    DIVIDE(
+        [Total Revenue],
+        CALCULATE([Total Revenue], REMOVEFILTERS(SalesData[Region])),
+        0
+    ) * 100
+
+State Revenue Rank =
+    RANKX(
+        ALLSELECTED(SalesData[State]),
+        [Total Revenue],
+        ,
+        DESC,
+        DENSE
+    )
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 5 — CUSTOMER MEASURES
+// ─────────────────────────────────────────────────────────
+
+Total Unique Customers =
+    DISTINCTCOUNT(SalesData[Customer_ID])
+
+Avg Revenue per Customer =
+    DIVIDE([Total Revenue], [Total Unique Customers], 0)
+
+Repeat Customers =
+    COUNTROWS(
+        FILTER(
+            SUMMARIZE(SalesData, SalesData[Customer_ID], "OrderCount", DISTINCTCOUNT(SalesData[Order_ID])),
+            [OrderCount] > 1
+        )
+    )
+
+Repeat Customer Rate % =
+    DIVIDE([Repeat Customers], [Total Unique Customers], 0) * 100
+
+Top Customer Segment =
+    CALCULATE(
+        FIRSTNONBLANK(SalesData[Customer_Segment], 1),
+        TOPN(1,
+            SUMMARIZE(SalesData, SalesData[Customer_Segment], "Rev", SUM(SalesData[Revenue])),
+            [Rev], DESC
+        )
+    )
+
+Segment Revenue Rank =
+    RANKX(
+        ALLSELECTED(SalesData[Customer_Segment]),
+        [Total Revenue],
+        ,
+        DESC,
+        DENSE
+    )
+
+New Customers (Current Period) =
+    CALCULATE(
+        DISTINCTCOUNT(SalesData[Customer_ID]),
+        FILTER(
+            SalesData,
+            CALCULATE(
+                MIN(SalesData[Order_Date]),
+                ALLEXCEPT(SalesData, SalesData[Customer_ID])
+            ) >= MIN(DateTable[Date])
+        )
+    )
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 6 — KPI STATUS INDICATORS
+// ─────────────────────────────────────────────────────────
+
+Revenue Target = 600000000       // ₹60 Crore monthly target (adjust as needed)
+
+Revenue vs Target % =
+    DIVIDE([Total Revenue], [Revenue Target], 0) * 100
+
+Revenue Status =
+    VAR Pct = [Revenue vs Target %]
+    RETURN
+        SWITCH(
+            TRUE(),
+            Pct >= 100, "✅ On Target",
+            Pct >= 85,  "⚠️ Near Target",
+            "❌ Below Target"
+        )
+
+Profit Margin Status =
+    VAR Margin = [Profit Margin %]
+    RETURN
+        SWITCH(
+            TRUE(),
+            Margin >= 45, "✅ Healthy",
+            Margin >= 30, "⚠️ Moderate",
+            "❌ Low Margin"
+        )
+
+Growth Status =
+    VAR Growth = [YoY Revenue Growth %]
+    RETURN
+        IF(Growth >= 0, "📈 Growing", "📉 Declining")
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 7 — DYNAMIC TITLE MEASURES
+// ─────────────────────────────────────────────────────────
+
+Selected Region Title =
+    IF(
+        ISFILTERED(SalesData[Region]),
+        "Region: " & SELECTEDVALUE(SalesData[Region], "Multiple"),
+        "All Regions"
+    )
+
+Selected Category Title =
+    IF(
+        ISFILTERED(SalesData[Product_Category]),
+        SELECTEDVALUE(SalesData[Product_Category], "Multiple Categories"),
+        "All Categories"
+    )
+
+Dashboard Subtitle =
+    "Last Updated: " & FORMAT(TODAY(), "DD MMM YYYY") &
+    "  |  Data Range: Jan 2024 – Dec 2025"
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 8 — TOOLTIP MEASURES
+// ─────────────────────────────────────────────────────────
+
+Tooltip Revenue Detail =
+    "Revenue: " & FORMAT([Total Revenue], "₹#,##0") &
+    UNICHAR(10) &
+    "Profit: " & FORMAT([Total Profit], "₹#,##0") &
+    UNICHAR(10) &
+    "Margin: " & FORMAT([Profit Margin %], "0.0") & "%"
+
+Tooltip Product Detail =
+    "Product: " & SELECTEDVALUE(SalesData[Product_Name], "Multiple") &
+    UNICHAR(10) &
+    "Category: " & SELECTEDVALUE(SalesData[Product_Category], "Multiple") &
+    UNICHAR(10) &
+    "Revenue: " & FORMAT([Total Revenue], "₹#,##0") &
+    UNICHAR(10) &
+    "Rank: #" & FORMAT([Product Revenue Rank], "0")
+
+
+// ─────────────────────────────────────────────────────────
+// SECTION 9 — CALCULATED COLUMNS (add to SalesData table)
+// ─────────────────────────────────────────────────────────
+
+// Year (Calculated Column)
+// Year = YEAR(SalesData[Order_Date])
+
+// Month Number (Calculated Column)
+// Month Number = MONTH(SalesData[Order_Date])
+
+// Month Name (Calculated Column)
+// Month Name = FORMAT(SalesData[Order_Date], "MMM")
+
+// Quarter (Calculated Column)
+// Quarter = "Q" & QUARTER(SalesData[Order_Date])
+
+// Revenue Band (Calculated Column)
+// Revenue Band =
+//     SWITCH(
+//         TRUE(),
+//         SalesData[Revenue] < 5000,   "Low (< ₹5K)",
+//         SalesData[Revenue] < 20000,  "Medium (₹5K–20K)",
+//         SalesData[Revenue] < 60000,  "High (₹20K–60K)",
+//         "Premium (> ₹60K)"
+//     )
+
+// ─────────────────────────────────────────────────────────
+// SECTION 10 — DATE TABLE (create as calculated table)
+// ─────────────────────────────────────────────────────────
+
+// DateTable =
+//     ADDCOLUMNS(
+//         CALENDARAUTO(),
+//         "Year",         YEAR([Date]),
+//         "Month Number", MONTH([Date]),
+//         "Month Name",   FORMAT([Date], "MMM"),
+//         "Quarter",      "Q" & QUARTER([Date]),
+//         "Year Quarter", YEAR([Date]) & " Q" & QUARTER([Date]),
+//         "Day of Week",  FORMAT([Date], "DDD"),
+//         "Week Number",  WEEKNUM([Date])
+//     )
+// Mark DateTable as Date Table using Date column.
